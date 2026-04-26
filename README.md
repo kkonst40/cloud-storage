@@ -7,13 +7,13 @@
 
 `docker compose -f docker-compose.yaml -f docker-compose.dev.yaml --env-file .env.dev --env-file backend/.env.dev up -d --build` 
 
-либо, при наличии Makefile: `make build-dev`
+либо, при наличии Make: `make build-dev`
 
 Для запуска Prod-стенда используется команда:
 
 `docker compose -f docker-compose.yaml -f docker-compose.prod.yaml --env-file .env.prod --env-file backend/.env.prod up -d --build`
 
-либо, при наличии Makefile: `make build-prod`
+либо, при наличии Make: `make build-prod`
 
 Env для Dev-стенда: `.env.dev.example` в корневой папке и в папке `backend/` необходимо переименовать в `.env.dev`.
 
