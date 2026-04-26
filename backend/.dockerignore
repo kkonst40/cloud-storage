@@ -1,0 +1,12 @@
+.editorconfig
+.git
+Makefile
+README.md
+.idea
+.vscode
+requests
+.env_example
+.dockerignore
+.gitignore
+cloud_file_storage
+.env

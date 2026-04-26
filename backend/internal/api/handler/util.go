@@ -1,0 +1,20 @@
+package handler
+
+import (
+	"github.com/gofiber/fiber/v3"
+	"github.com/kkonst40/cloud-storage/backend/internal/api/dto/profile"
+)
+
+func RequestedUserId(ctx fiber.Ctx) int64 {
+	return ctx.Locals("user_id").(int64)
+}
+
+func RequestedLogin(ctx fiber.Ctx) profile.LoginRequest {
+	return ctx.Locals("user_data").(profile.LoginRequest)
+}
+
+func SetCommonHeaders(ctx fiber.Ctx) {
+	ctx.Accepts("application/json")
+	ctx.Set(fiber.HeaderContentType, "application/json")
+	ctx.Set(fiber.HeaderAccept, "application/json")
+}

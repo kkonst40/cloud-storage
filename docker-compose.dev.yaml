@@ -1,0 +1,21 @@
+services:
+  db:
+    volumes:
+      - ./docker/postgres/init_test.sql:/docker-entrypoint-initdb.d/init_test.sql
+      - ./docker/postgres/data_test:/var/lib/postgresql/data
+
+  minio:
+    volumes:
+      - ./docker/minio/data_test:/data
+
+  redis:
+    volumes:
+      - ./docker/redis/data_test:/data
+
+  migrator:
+    env_file:
+      - ./backend/.env.dev
+
+  backend:
+    env_file:
+      - ./backend/.env.dev
