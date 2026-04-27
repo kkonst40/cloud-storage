@@ -12,6 +12,3 @@
 main
 cloud_file_storage
 requests
-.env
-.env.prod
-.env.dev
