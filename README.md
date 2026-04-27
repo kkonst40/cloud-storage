@@ -15,8 +15,4 @@
 
 либо, при наличии Make: `make build-prod`
 
-Env для Dev-стенда: `.env.dev.example` в корневой папке и в папке `backend/` необходимо переименовать в `.env.dev`.
-
-Env для Prod-стенда: `.env.prod.example` в корневой папке и в папке `backend/` необходимо переименовать в`.env.prod`.
-
 После запуска приложение будет доступно по адресу http://localhost:80
