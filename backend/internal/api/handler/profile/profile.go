@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
@@ -19,7 +20,7 @@ type Handler struct {
 }
 
 type UserService interface {
-	UserById(userId int64) (domain.User, error)
+	UserById(ctx context.Context, userId int64) (domain.User, error)
 }
 
 func New(userService UserService) *Handler {
@@ -34,7 +35,7 @@ func (p *Handler) Show(ctx fiber.Ctx) error {
 	handler.SetCommonHeaders(ctx)
 	userId := handler.RequestedUserId(ctx)
 
-	user, err := p.userService.UserById(userId)
+	user, err := p.userService.UserById(ctx, userId)
 	if err != nil {
 		if !errors.Is(err, userservice.ErrNotFound) {
 			slog.Error(err.Error(), "pkg", pkg, "op", op)

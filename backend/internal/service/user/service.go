@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"errors"
 
 	"github.com/kkonst40/cloud-storage/backend/internal/domain"
@@ -21,11 +22,11 @@ type Service struct {
 }
 
 type Repository interface {
-	Create(user domain.User) (domain.User, error)
-	IsExistsByName(name string) (bool, error)
-	IsExistsByID(id int64) (bool, error)
-	ByName(name string) (domain.User, error)
-	ById(userId int64) (domain.User, error)
+	Create(ctx context.Context, user domain.User) (domain.User, error)
+	IsExistsByName(ctx context.Context, name string) (bool, error)
+	IsExistsByID(ctx context.Context, id int64) (bool, error)
+	ByName(ctx context.Context, name string) (domain.User, error)
+	ById(ctx context.Context, userId int64) (domain.User, error)
 }
 
 func New(userRepo Repository) *Service {
@@ -34,10 +35,10 @@ func New(userRepo Repository) *Service {
 	}
 }
 
-func (s *Service) CreateUser(name, pwd string) (domain.User, error) {
+func (s *Service) CreateUser(ctx context.Context, name, pwd string) (domain.User, error) {
 	const op = "CreateUser"
 
-	exists, err := s.userRepo.IsExistsByName(name)
+	exists, err := s.userRepo.IsExistsByName(ctx, name)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -56,7 +57,7 @@ func (s *Service) CreateUser(name, pwd string) (domain.User, error) {
 		Password: hashedPassword,
 	}
 
-	user, err = s.userRepo.Create(user)
+	user, err = s.userRepo.Create(ctx, user)
 	if err != nil {
 		if errors.Is(err, storage.ErrDuplicate) {
 			return domain.User{}, ErrAlreadyExists
@@ -68,10 +69,10 @@ func (s *Service) CreateUser(name, pwd string) (domain.User, error) {
 	return user, nil
 }
 
-func (s *Service) UserByName(name string) (domain.User, error) {
+func (s *Service) UserByName(ctx context.Context, name string) (domain.User, error) {
 	const op = "UserEmail"
 
-	u, err := s.userRepo.ByName(name)
+	u, err := s.userRepo.ByName(ctx, name)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return domain.User{}, ErrNotFound
@@ -83,10 +84,10 @@ func (s *Service) UserByName(name string) (domain.User, error) {
 	return u, nil
 }
 
-func (s *Service) UserById(userId int64) (domain.User, error) {
+func (s *Service) UserById(ctx context.Context, userId int64) (domain.User, error) {
 	const op = "UserById"
 
-	user, err := s.userRepo.ById(userId)
+	user, err := s.userRepo.ById(ctx, userId)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return domain.User{}, ErrNotFound

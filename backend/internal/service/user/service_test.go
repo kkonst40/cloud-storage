@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ type testService struct {
 }
 
 func TestUserService_CreateUser(t *testing.T) {
+	ctx := context.Background()
 	userService := userTestService(t)
 	defer func(db *sql.DB) {
 		err := db.Close()
@@ -33,7 +35,7 @@ func TestUserService_CreateUser(t *testing.T) {
 		Password: "1234",
 	}
 
-	u1, err := userService.service.CreateUser(user.Username, user.Password)
+	u1, err := userService.service.CreateUser(ctx, user.Username, user.Password)
 	if err != nil {
 		t.Errorf("error while create new user: %v", err)
 	}
@@ -50,6 +52,7 @@ func TestUserService_CreateUser(t *testing.T) {
 }
 
 func TestUserService_CreateUserDuplicate(t *testing.T) {
+	ctx := context.Background()
 	userService := userTestService(t)
 	defer func(db *sql.DB) {
 		err := db.Close()
@@ -63,7 +66,7 @@ func TestUserService_CreateUserDuplicate(t *testing.T) {
 		Password: "1234",
 	}
 
-	u1, err := userService.service.CreateUser(user.Username, user.Password)
+	u1, err := userService.service.CreateUser(ctx, user.Username, user.Password)
 	if err != nil {
 		t.Errorf("error while create new user: %v", err)
 	}
@@ -75,7 +78,7 @@ func TestUserService_CreateUserDuplicate(t *testing.T) {
 	}(userService.db, u1.ID)
 
 	// check when trying to create duplicate user
-	u2, err := userService.service.CreateUser(user.Username, user.Password)
+	u2, err := userService.service.CreateUser(ctx, user.Username, user.Password)
 	if err != nil {
 		if !errors.Is(err, ErrAlreadyExists) {
 			t.Errorf("error while create duplicate user: %v", err)
@@ -87,6 +90,7 @@ func TestUserService_CreateUserDuplicate(t *testing.T) {
 }
 
 func TestUserService_UserByName(t *testing.T) {
+	ctx := context.Background()
 	userService := userTestService(t)
 	defer func(db *sql.DB) {
 		err := db.Close()
@@ -97,7 +101,7 @@ func TestUserService_UserByName(t *testing.T) {
 
 	name := "test@example.ru"
 
-	u1, err := userService.service.CreateUser(name, "1234")
+	u1, err := userService.service.CreateUser(ctx, name, "1234")
 	if err != nil {
 		t.Errorf("error while create new user: %v", err)
 	}
@@ -108,7 +112,7 @@ func TestUserService_UserByName(t *testing.T) {
 		}
 	}(userService.db, u1.ID)
 
-	u2, err := userService.service.UserByName(name)
+	u2, err := userService.service.UserByName(ctx, name)
 	if err != nil {
 		t.Errorf("error while get user by email: %v", err)
 	}

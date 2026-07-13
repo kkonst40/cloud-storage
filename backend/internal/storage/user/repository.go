@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -22,7 +23,7 @@ func NewRepository(db *sql.DB) *Repository {
 	}
 }
 
-func (r *Repository) Create(user domain.User) (domain.User, error) {
+func (r *Repository) Create(ctx context.Context, user domain.User) (domain.User, error) {
 	const op = "Create"
 	const query = `
 		INSERT INTO users (username, password)
@@ -30,7 +31,7 @@ func (r *Repository) Create(user domain.User) (domain.User, error) {
 		RETURNING id
 	`
 
-	err := r.db.QueryRow(query, user.Username, user.Password).Scan(&user.ID)
+	err := r.db.QueryRowContext(ctx, query, user.Username, user.Password).Scan(&user.ID)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -43,7 +44,7 @@ func (r *Repository) Create(user domain.User) (domain.User, error) {
 	return user, nil
 }
 
-func (r *Repository) IsExistsByID(id int64) (bool, error) {
+func (r *Repository) IsExistsByID(ctx context.Context, id int64) (bool, error) {
 	const op = "IsExistsByID"
 	const query = `
 		SELECT EXISTS(
@@ -55,7 +56,7 @@ func (r *Repository) IsExistsByID(id int64) (bool, error) {
 
 	var exists bool
 
-	err := r.db.QueryRow(query, id).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
 		return false, errs.Wrap(pkg, op, err)
 	}
@@ -63,7 +64,7 @@ func (r *Repository) IsExistsByID(id int64) (bool, error) {
 	return exists, nil
 }
 
-func (r *Repository) IsExistsByName(name string) (bool, error) {
+func (r *Repository) IsExistsByName(ctx context.Context, name string) (bool, error) {
 	const op = "IsExistsByName"
 	const query = `
 		SELECT EXISTS(
@@ -75,7 +76,7 @@ func (r *Repository) IsExistsByName(name string) (bool, error) {
 
 	var exists bool
 
-	err := r.db.QueryRow(query, name).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, query, name).Scan(&exists)
 	if err != nil {
 		return false, errs.Wrap(pkg, op, err)
 	}
@@ -83,7 +84,7 @@ func (r *Repository) IsExistsByName(name string) (bool, error) {
 	return exists, nil
 }
 
-func (r *Repository) ByName(name string) (domain.User, error) {
+func (r *Repository) ByName(ctx context.Context, name string) (domain.User, error) {
 	const op = "ByEmail"
 	const query = `
 		SELECT id, username, password
@@ -93,7 +94,7 @@ func (r *Repository) ByName(name string) (domain.User, error) {
 
 	var user domain.User
 
-	err := r.db.QueryRow(query, name).Scan(
+	err := r.db.QueryRowContext(ctx, query, name).Scan(
 		&user.ID,
 		&user.Username,
 		&user.Password,
@@ -108,7 +109,7 @@ func (r *Repository) ByName(name string) (domain.User, error) {
 	return user, nil
 }
 
-func (r *Repository) ById(userId int64) (domain.User, error) {
+func (r *Repository) ById(ctx context.Context, userId int64) (domain.User, error) {
 	const op = "ById"
 	const query = `
 		SELECT id, username, password
@@ -118,7 +119,7 @@ func (r *Repository) ById(userId int64) (domain.User, error) {
 
 	var user domain.User
 
-	err := r.db.QueryRow(query, userId).Scan(
+	err := r.db.QueryRowContext(ctx, query, userId).Scan(
 		&user.ID,
 		&user.Username,
 		&user.Password,

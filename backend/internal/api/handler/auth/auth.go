@@ -34,8 +34,8 @@ type SessionService interface {
 }
 
 type UserService interface {
-	CreateUser(name, pwd string) (domain.User, error)
-	UserByName(name string) (domain.User, error)
+	CreateUser(ctx context.Context, name, pwd string) (domain.User, error)
+	UserByName(ctx context.Context, name string) (domain.User, error)
 }
 
 func New(
@@ -59,7 +59,7 @@ func (h *Handler) Login(ctx fiber.Ctx) error {
 	handler.SetCommonHeaders(ctx)
 	r := handler.RequestedLogin(ctx)
 
-	user, err := h.userService.UserByName(r.Username)
+	user, err := h.userService.UserByName(ctx, r.Username)
 	if err != nil {
 		if !errors.Is(err, userservice.ErrNotFound) {
 			slog.Error(err.Error(), "pkg", pkg, "op", op)
@@ -98,7 +98,7 @@ func (h *Handler) Register(ctx fiber.Ctx) error {
 	handler.SetCommonHeaders(ctx)
 	r := handler.RequestedLogin(ctx)
 
-	user, err := h.userService.CreateUser(r.Username, r.Password)
+	user, err := h.userService.CreateUser(ctx, r.Username, r.Password)
 	if err != nil {
 		if errors.Is(err, userservice.ErrAlreadyExists) {
 			return ctx.Status(fiber.StatusConflict).JSON(
