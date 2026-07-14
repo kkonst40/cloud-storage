@@ -29,8 +29,10 @@ func main() {
 
 	<-appCtx.Done()
 
-	_, cancel = context.WithTimeout(context.Background(), 20*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	application.Shutdown()
+	if err := application.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("failed to gracefully shutdown: %v", err)
+	}
 }

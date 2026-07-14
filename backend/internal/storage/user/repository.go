@@ -17,75 +17,39 @@ type Repository struct {
 	db *sql.DB
 }
 
-func NewRepository(db *sql.DB) *Repository {
+func New(db *sql.DB) *Repository {
 	return &Repository{
 		db: db,
 	}
 }
 
-func (r *Repository) Create(ctx context.Context, user domain.User) (domain.User, error) {
-	const op = "Create"
+func (r *Repository) GetById(ctx context.Context, userId int64) (domain.User, error) {
+	const op = "GetById"
 	const query = `
-		INSERT INTO users (username, password)
-		VALUES ($1, $2)
-		RETURNING id
+		SELECT id, username, password
+		FROM users
+		WHERE id = $1
 	`
 
-	err := r.db.QueryRowContext(ctx, query, user.Username, user.Password).Scan(&user.ID)
+	var user domain.User
+
+	err := r.db.QueryRowContext(ctx, query, userId).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Password,
+	)
 
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return domain.User{}, storage.ErrDuplicate
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.User{}, storage.ErrNotFound
 		}
 		return domain.User{}, errs.Wrap(pkg, op, err)
 	}
-
 	return user, nil
 }
 
-func (r *Repository) IsExistsByID(ctx context.Context, id int64) (bool, error) {
-	const op = "IsExistsByID"
-	const query = `
-		SELECT EXISTS(
-			SELECT 1
-			FROM users
-			WHERE id = $1
-		)
-	`
-
-	var exists bool
-
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
-	if err != nil {
-		return false, errs.Wrap(pkg, op, err)
-	}
-
-	return exists, nil
-}
-
-func (r *Repository) IsExistsByName(ctx context.Context, name string) (bool, error) {
-	const op = "IsExistsByName"
-	const query = `
-		SELECT EXISTS(
-			SELECT 1
-			FROM users
-			WHERE username = $1
-		)
-	`
-
-	var exists bool
-
-	err := r.db.QueryRowContext(ctx, query, name).Scan(&exists)
-	if err != nil {
-		return false, errs.Wrap(pkg, op, err)
-	}
-
-	return exists, nil
-}
-
-func (r *Repository) ByName(ctx context.Context, name string) (domain.User, error) {
-	const op = "ByEmail"
+func (r *Repository) GetByName(ctx context.Context, name string) (domain.User, error) {
+	const op = "GetByName"
 	const query = `
 		SELECT id, username, password
 		FROM users
@@ -109,27 +73,23 @@ func (r *Repository) ByName(ctx context.Context, name string) (domain.User, erro
 	return user, nil
 }
 
-func (r *Repository) ById(ctx context.Context, userId int64) (domain.User, error) {
-	const op = "ById"
+func (r *Repository) Create(ctx context.Context, user domain.User) (domain.User, error) {
+	const op = "Create"
 	const query = `
-		SELECT id, username, password
-		FROM users
-		WHERE id = $1
+		INSERT INTO users (username, password)
+		VALUES ($1, $2)
+		RETURNING id
 	`
 
-	var user domain.User
-
-	err := r.db.QueryRowContext(ctx, query, userId).Scan(
-		&user.ID,
-		&user.Username,
-		&user.Password,
-	)
+	err := r.db.QueryRowContext(ctx, query, user.Username, user.Password).Scan(&user.ID)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return domain.User{}, storage.ErrNotFound
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.User{}, storage.ErrDuplicate
 		}
 		return domain.User{}, errs.Wrap(pkg, op, err)
 	}
+
 	return user, nil
 }

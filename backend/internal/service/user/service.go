@@ -1,3 +1,4 @@
+//go:generate mockgen -source=service.go -destination=mocks/mock_repository.go -package=mocks
 package user
 
 import (
@@ -22,11 +23,9 @@ type Service struct {
 }
 
 type Repository interface {
+	GetByName(ctx context.Context, name string) (domain.User, error)
+	GetById(ctx context.Context, userId int64) (domain.User, error)
 	Create(ctx context.Context, user domain.User) (domain.User, error)
-	IsExistsByName(ctx context.Context, name string) (bool, error)
-	IsExistsByID(ctx context.Context, id int64) (bool, error)
-	ByName(ctx context.Context, name string) (domain.User, error)
-	ById(ctx context.Context, userId int64) (domain.User, error)
 }
 
 func New(userRepo Repository) *Service {
@@ -35,21 +34,42 @@ func New(userRepo Repository) *Service {
 	}
 }
 
+func (s *Service) UserByName(ctx context.Context, name string) (domain.User, error) {
+	const op = "UserByName"
+
+	user, err := s.userRepo.GetByName(ctx, name)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return domain.User{}, ErrNotFound
+		}
+
+		return domain.User{}, errs.Wrap(pkg, op, err)
+	}
+
+	return user, nil
+}
+
+func (s *Service) UserById(ctx context.Context, userId int64) (domain.User, error) {
+	const op = "UserById"
+
+	user, err := s.userRepo.GetById(ctx, userId)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return domain.User{}, ErrNotFound
+		}
+
+		return domain.User{}, errs.Wrap(pkg, op, err)
+	}
+
+	return user, nil
+}
+
 func (s *Service) CreateUser(ctx context.Context, name, pwd string) (domain.User, error) {
 	const op = "CreateUser"
 
-	exists, err := s.userRepo.IsExistsByName(ctx, name)
-	if err != nil {
-		return domain.User{}, err
-	}
-
-	if exists {
-		return domain.User{}, ErrAlreadyExists
-	}
-
 	hashedPassword, err := password.GeneratePwdHash(pwd)
 	if err != nil {
-		return domain.User{}, err
+		return domain.User{}, errs.Wrap(pkg, op, err)
 	}
 
 	user := domain.User{
@@ -61,36 +81,6 @@ func (s *Service) CreateUser(ctx context.Context, name, pwd string) (domain.User
 	if err != nil {
 		if errors.Is(err, storage.ErrDuplicate) {
 			return domain.User{}, ErrAlreadyExists
-		}
-
-		return domain.User{}, errs.Wrap(pkg, op, err)
-	}
-
-	return user, nil
-}
-
-func (s *Service) UserByName(ctx context.Context, name string) (domain.User, error) {
-	const op = "UserEmail"
-
-	u, err := s.userRepo.ByName(ctx, name)
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return domain.User{}, ErrNotFound
-		}
-
-		return domain.User{}, errs.Wrap(pkg, op, err)
-	}
-
-	return u, nil
-}
-
-func (s *Service) UserById(ctx context.Context, userId int64) (domain.User, error) {
-	const op = "UserById"
-
-	user, err := s.userRepo.ById(ctx, userId)
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return domain.User{}, ErrNotFound
 		}
 
 		return domain.User{}, errs.Wrap(pkg, op, err)

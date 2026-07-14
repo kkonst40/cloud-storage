@@ -1,7 +1,7 @@
 package app
 
 import (
-	"log/slog"
+	"context"
 
 	"github.com/kkonst40/cloud-storage/backend/internal/api"
 	authhandler "github.com/kkonst40/cloud-storage/backend/internal/api/handler/auth"
@@ -16,8 +16,6 @@ import (
 	userrepo "github.com/kkonst40/cloud-storage/backend/internal/storage/user"
 )
 
-const pkg = "App"
-
 type App struct {
 	apiClient *api.Client
 	dbClient  *storage.Client
@@ -29,7 +27,7 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	s3Client, err := s3.NewClient(cfg)
+	s3Client, err := s3.NewMinIOClient(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +38,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	var (
-		userRepo = userrepo.NewRepository(dbClient.DB())
+		userRepo = userrepo.New(dbClient.DB())
 	)
 
 	var (
@@ -68,14 +66,22 @@ func (a *App) Run() {
 	a.apiClient.Start()
 }
 
-func (a *App) Shutdown() {
-	const op = "Shutdown"
+func (a *App) Shutdown(ctx context.Context) error {
+	done := make(chan error, 1)
 
-	if err := a.apiClient.Shutdown(); err != nil {
-		slog.Error(err.Error(), "pkg", pkg, "op", op)
-	}
+	go func() {
+		if err := a.apiClient.Shutdown(); err != nil {
+			done <- err
+			return
+		}
 
-	if err := a.dbClient.Shutdown(); err != nil {
-		slog.Error(err.Error(), "pkg", pkg, "op", op)
+		done <- a.dbClient.Shutdown()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

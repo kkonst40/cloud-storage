@@ -11,7 +11,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func NewClient(cfg *config.Config) (*minio.Client, error) {
+func NewMinIOClient(cfg *config.Config) (*minio.Client, error) {
 	client, err := minio.New(cfg.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.S3AccessKey, cfg.S3SecretAccess, ""),
 		Secure: cfg.S3UseSSL,

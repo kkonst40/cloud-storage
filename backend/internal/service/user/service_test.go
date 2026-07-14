@@ -2,175 +2,280 @@ package user
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/kkonst40/cloud-storage/backend/internal/config"
 	"github.com/kkonst40/cloud-storage/backend/internal/domain"
+	errs "github.com/kkonst40/cloud-storage/backend/internal/errors"
+	"github.com/kkonst40/cloud-storage/backend/internal/service/user/mocks"
 	"github.com/kkonst40/cloud-storage/backend/internal/storage"
-	"github.com/kkonst40/cloud-storage/backend/internal/storage/user"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
-type testService struct {
-	service *Service
-	db      *sql.DB
-}
+func TestService_UserByName(t *testing.T) {
+	type mockBehavior func(r *mocks.MockRepository, ctx context.Context, name string)
 
-func TestUserService_CreateUser(t *testing.T) {
+	type testCase struct {
+		name         string
+		username     string
+		mock         mockBehavior
+		expectedUser domain.User
+		expectedErr  error
+		wantErr      bool
+	}
+
 	ctx := context.Background()
-	userService := userTestService(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(userService.db)
+	testUser := domain.User{
+		ID:       1,
+		Username: "test_user",
+	}
+	unexpectedErr := errors.New("db connection failure")
 
-	user := domain.User{
-		Username: "test@example.ru",
-		Password: "1234",
+	tests := []testCase{
+		{
+			name:     "Success",
+			username: "test_user",
+			mock: func(r *mocks.MockRepository, ctx context.Context, name string) {
+				r.EXPECT().
+					GetByName(ctx, name).
+					Return(testUser, nil).
+					Times(1)
+			},
+			expectedUser: testUser,
+			wantErr:      false,
+		},
+		{
+			name:     "User Not Found",
+			username: "non_existent",
+			mock: func(r *mocks.MockRepository, ctx context.Context, name string) {
+				r.EXPECT().
+					GetByName(ctx, name).
+					Return(domain.User{}, storage.ErrNotFound).
+					Times(1)
+			},
+			expectedUser: domain.User{},
+			expectedErr:  ErrNotFound,
+			wantErr:      true,
+		},
+		{
+			name:     "Unexpected Repository Error",
+			username: "test_user",
+			mock: func(r *mocks.MockRepository, ctx context.Context, name string) {
+				r.EXPECT().
+					GetByName(ctx, name).
+					Return(domain.User{}, unexpectedErr).
+					Times(1)
+			},
+			expectedUser: domain.User{},
+			expectedErr:  errs.Wrap("UserService", "UserByName", unexpectedErr),
+			wantErr:      true,
+		},
 	}
 
-	u1, err := userService.service.CreateUser(ctx, user.Username, user.Password)
-	if err != nil {
-		t.Errorf("error while create new user: %v", err)
-	}
-	defer func(db *sql.DB, userId int64) {
-		err := deleteTestUser(db, userId)
-		if err != nil {
-			t.Errorf("error while delete test user: %v", err)
-		}
-	}(userService.db, u1.ID)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	if u1.Username != user.Username {
-		t.Errorf("email does not match")
+			mockRepo := mocks.NewMockRepository(ctrl)
+			tc.mock(mockRepo, ctx, tc.username)
+			srv := New(mockRepo)
+
+			resUser, err := srv.UserByName(ctx, tc.username)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.expectedErr != nil {
+					//assert.ErrorIs(t, err, tc.expectedErr)
+					assert.Equal(t, tc.expectedErr.Error(), err.Error())
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedUser, resUser)
+			}
+		})
 	}
 }
 
-func TestUserService_CreateUserDuplicate(t *testing.T) {
+func TestService_UserById(t *testing.T) {
+	type mockBehavior func(r *mocks.MockRepository, ctx context.Context, id int64)
+
+	type testCase struct {
+		name         string
+		userID       int64
+		mock         mockBehavior
+		expectedUser domain.User
+		expectedErr  error
+		wantErr      bool
+	}
+
 	ctx := context.Background()
-	userService := userTestService(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(userService.db)
+	testUser := domain.User{
+		ID:       666,
+		Username: "test_user",
+	}
+	unexpectedErr := errors.New("database timeout")
 
-	user := domain.User{
-		Username: "test@example.ru",
-		Password: "1234",
+	tests := []testCase{
+		{
+			name:   "Success",
+			userID: 666,
+			mock: func(r *mocks.MockRepository, ctx context.Context, id int64) {
+				r.EXPECT().
+					GetById(ctx, id).
+					Return(testUser, nil).
+					Times(1)
+			},
+			expectedUser: testUser,
+			wantErr:      false,
+		},
+		{
+			name:   "User Not Found",
+			userID: 999,
+			mock: func(r *mocks.MockRepository, ctx context.Context, id int64) {
+				r.EXPECT().
+					GetById(ctx, id).
+					Return(domain.User{}, storage.ErrNotFound).
+					Times(1)
+			},
+			expectedUser: domain.User{},
+			expectedErr:  ErrNotFound,
+			wantErr:      true,
+		},
+		{
+			name:   "Unexpected Repository Error",
+			userID: 666,
+			mock: func(r *mocks.MockRepository, ctx context.Context, id int64) {
+				r.EXPECT().
+					GetById(ctx, id).
+					Return(domain.User{}, unexpectedErr).
+					Times(1)
+			},
+			expectedUser: domain.User{},
+			expectedErr:  errs.Wrap("UserService", "UserById", unexpectedErr),
+			wantErr:      true,
+		},
 	}
 
-	u1, err := userService.service.CreateUser(ctx, user.Username, user.Password)
-	if err != nil {
-		t.Errorf("error while create new user: %v", err)
-	}
-	defer func(db *sql.DB, userId int64) {
-		err := deleteTestUser(db, userId)
-		if err != nil {
-			t.Errorf("error while delete test user: %v", err)
-		}
-	}(userService.db, u1.ID)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	// check when trying to create duplicate user
-	u2, err := userService.service.CreateUser(ctx, user.Username, user.Password)
-	if err != nil {
-		if !errors.Is(err, ErrAlreadyExists) {
-			t.Errorf("error while create duplicate user: %v", err)
-		}
-	} else {
-		deleteTestUser(userService.db, u2.ID)
-		t.Error("create duplicate user not allowed")
+			mockRepo := mocks.NewMockRepository(ctrl)
+			tc.mock(mockRepo, ctx, tc.userID)
+			srv := New(mockRepo)
+
+			resUser, err := srv.UserById(ctx, tc.userID)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.expectedErr != nil {
+					//assert.ErrorIs(t, err, tc.expectedErr)
+					assert.Equal(t, tc.expectedErr.Error(), err.Error())
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedUser, resUser)
+			}
+		})
 	}
 }
 
-func TestUserService_UserByName(t *testing.T) {
+func TestService_CreateUser(t *testing.T) {
+	type mockBehavior func(r *mocks.MockRepository, ctx context.Context, expectedName string)
+
+	type testCase struct {
+		name         string
+		username     string
+		password     string
+		mock         mockBehavior
+		expectedUser domain.User
+		expectedErr  error
+		wantErr      bool
+	}
+
 	ctx := context.Background()
-	userService := userTestService(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(userService.db)
+	unexpectedErr := errors.New("db failure")
 
-	name := "test@example.ru"
+	tests := []testCase{
+		{
+			name:     "Success",
+			username: "new_user",
+			password: "secret_password",
+			mock: func(r *mocks.MockRepository, ctx context.Context, expectedName string) {
+				r.EXPECT().
+					Create(ctx, gomock.Cond(func(x any) bool {
+						u, ok := x.(domain.User)
+						if !ok {
+							return false
+						}
 
-	u1, err := userService.service.CreateUser(ctx, name, "1234")
-	if err != nil {
-		t.Errorf("error while create new user: %v", err)
-	}
-	defer func(db *sql.DB, userId int64) {
-		err := deleteTestUser(db, userId)
-		if err != nil {
-			t.Errorf("error while delete test user: %v", err)
-		}
-	}(userService.db, u1.ID)
-
-	u2, err := userService.service.UserByName(ctx, name)
-	if err != nil {
-		t.Errorf("error while get user by email: %v", err)
-	}
-
-	if u2.ID != u1.ID {
-		t.Errorf("user by email not match")
-	}
-}
-
-func deleteTestUser(db *sql.DB, userId int64) error {
-	stmt, err := db.Prepare("DELETE FROM users WHERE id = $1")
-	if err != nil {
-		return err
-	}
-	defer func(stmt *sql.Stmt) {
-		err := stmt.Close()
-		if err != nil {
-			return
-		}
-	}(stmt)
-	_, err = stmt.Exec(userId)
-
-	return err
-}
-
-func userTestService(t *testing.T) *testService {
-	dir, err := findProjectRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := config.MustNew(filepath.Join(dir, ".env.dev"))
-	dbClient, err := storage.NewClient(cfg)
-	if err != nil {
-		t.Fatal(err)
+						return u.Username == expectedName && u.Password != ""
+					})).
+					DoAndReturn(func(ctx context.Context, u domain.User) (domain.User, error) {
+						u.ID = 100
+						return u, nil
+					}).
+					Times(1)
+			},
+			expectedUser: domain.User{ID: 100, Username: "new_user"},
+			wantErr:      false,
+		},
+		{
+			name:     "User Already Exists (Duplicate)",
+			username: "existing_user",
+			password: "password123",
+			mock: func(r *mocks.MockRepository, ctx context.Context, expectedName string) {
+				r.EXPECT().
+					Create(ctx, gomock.Any()).
+					Return(domain.User{}, storage.ErrDuplicate).
+					Times(1)
+			},
+			expectedUser: domain.User{},
+			expectedErr:  ErrAlreadyExists,
+			wantErr:      true,
+		},
+		{
+			name:     "Unexpected Repository Error",
+			username: "failed_user",
+			password: "password123",
+			mock: func(r *mocks.MockRepository, ctx context.Context, expectedName string) {
+				r.EXPECT().
+					Create(ctx, gomock.Any()).
+					Return(domain.User{}, unexpectedErr).
+					Times(1)
+			},
+			expectedUser: domain.User{},
+			expectedErr:  errs.Wrap("UserService", "CreateUser", unexpectedErr),
+			wantErr:      true,
+		},
 	}
 
-	db := dbClient.DB()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	return &testService{
-		service: New(user.NewRepository(db)),
-		db:      db,
-	}
-}
+			mockRepo := mocks.NewMockRepository(ctrl)
+			tc.mock(mockRepo, ctx, tc.username)
+			srv := New(mockRepo)
 
-func findProjectRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("go.mod not found")
-		}
-		dir = parent
+			resUser, err := srv.CreateUser(ctx, tc.username, tc.password)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.expectedErr != nil {
+					//assert.ErrorIs(t, err, tc.expectedErr)
+					assert.Equal(t, tc.expectedErr.Error(), err.Error())
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedUser.ID, resUser.ID)
+				assert.Equal(t, tc.expectedUser.Username, resUser.Username)
+				assert.NotEmpty(t, resUser.Password)
+			}
+		})
 	}
 }

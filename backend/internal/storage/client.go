@@ -46,7 +46,7 @@ func (cl *Client) DB() *sql.DB {
 
 func (cl *Client) Shutdown() error {
 	if err := cl.db.Close(); err != nil {
-		return fmt.Errorf("storage.Client: Shutdown error: %w", err)
+		return fmt.Errorf("PostgresClient.Shutdown: %w", err)
 	}
 	slog.Info("DB shutdown")
 

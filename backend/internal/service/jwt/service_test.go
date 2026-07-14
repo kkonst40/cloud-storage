@@ -1,18 +1,16 @@
 package jwt
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/kkonst40/cloud-storage/backend/internal/config"
 )
 
-func TestJWT_GenerateAccessToken(t *testing.T) {
-	cfg, err := getConfig()
-	if err != nil {
-		t.Fatal(err)
+func TestService_GenerateAccessToken(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:                 "test_secret",
+		JWTIssuer:                 "test_issuer",
+		AccessTokenExpiresMinutes: 1,
 	}
 
 	jwtService := New(cfg)
@@ -27,10 +25,11 @@ func TestJWT_GenerateAccessToken(t *testing.T) {
 	}
 }
 
-func TestJWT_ValidateAccessToken(t *testing.T) {
-	cfg, err := getConfig()
-	if err != nil {
-		t.Fatal(err)
+func TestService_ValidateAccessToken(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:                 "test_secret",
+		JWTIssuer:                 "test_issuer",
+		AccessTokenExpiresMinutes: 1,
 	}
 
 	jwtService := New(cfg)
@@ -52,30 +51,4 @@ func TestJWT_ValidateAccessToken(t *testing.T) {
 	if userId != outUserId {
 		t.Errorf("subject must be %v, got: %v", userId, outUserId)
 	}
-}
-
-func findProjectRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("go.mod not found")
-		}
-		dir = parent
-	}
-}
-
-func getConfig() (*config.Config, error) {
-	dir, err := findProjectRoot()
-	if err != nil {
-		return nil, err
-	}
-
-	return config.MustNew(filepath.Join(dir, ".env.dev")), nil
 }

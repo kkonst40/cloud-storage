@@ -1,0 +1,227 @@
+//go:build integration
+
+package tests
+
+import (
+	"context"
+	"database/sql"
+	"testing"
+	"time"
+
+	"github.com/kkonst40/cloud-storage/backend/internal/domain"
+	"github.com/kkonst40/cloud-storage/backend/internal/storage"
+	userrepo "github.com/kkonst40/cloud-storage/backend/internal/storage/user"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func clearUsersTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+	_, err := db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+	require.NoError(t, err, "failed to truncate users table")
+}
+
+func seedUser(t *testing.T, db *sql.DB, user domain.User) {
+	t.Helper()
+	query := `INSERT INTO users (id, username, password) VALUES ($1, $2, $3)`
+	_, err := db.Exec(query, user.ID, user.Username, user.Password)
+	require.NoError(t, err, "failed to seed user")
+}
+
+func getUserFromDB(t *testing.T, db *sql.DB, id int64) domain.User {
+	t.Helper()
+	var user domain.User
+
+	query := `SELECT id, username, password FROM users WHERE id = $1`
+	err := db.QueryRow(query, id).Scan(&user.ID, &user.Username, &user.Password)
+	require.NoError(t, err, "failed to get user from db for verification")
+
+	return user
+}
+
+func TestRepository_GetById(t *testing.T) {
+	repo := userrepo.New(testDB)
+
+	type testCase struct {
+		name     string
+		setup    func(t *testing.T)
+		idToGet  int64
+		wantUser domain.User
+		wantErr  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "Success",
+			setup: func(t *testing.T) {
+				seedUser(t, testDB, domain.User{
+					ID:       666,
+					Username: "marine",
+					Password: "pwdhash",
+				})
+			},
+			idToGet: 666,
+			wantUser: domain.User{
+				ID:       666,
+				Username: "marine",
+				Password: "pwdhash",
+			},
+			wantErr: nil,
+		},
+		{
+			name:     "User Not Found",
+			setup:    func(t *testing.T) {},
+			idToGet:  999,
+			wantUser: domain.User{},
+			wantErr:  storage.ErrNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearUsersTable(t, testDB)
+			tc.setup(t)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			user, err := repo.GetById(ctx, tc.idToGet)
+
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, user)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.wantUser, user)
+			}
+		})
+	}
+}
+
+func TestRepository_GetByName(t *testing.T) {
+	repo := userrepo.New(testDB)
+
+	type testCase struct {
+		name          string
+		setup         func(t *testing.T)
+		usernameToGet string
+		wantUser      domain.User
+		wantErr       error
+	}
+
+	testCases := []testCase{
+		{
+			name: "Success",
+			setup: func(t *testing.T) {
+				seedUser(t, testDB, domain.User{
+					ID:       1,
+					Username: "alice",
+					Password: "pwdhash",
+				})
+			},
+			usernameToGet: "alice",
+			wantUser: domain.User{
+				ID:       1,
+				Username: "alice",
+				Password: "pwdhash",
+			},
+			wantErr: nil,
+		},
+		{
+			name:          "User Not Found",
+			setup:         func(t *testing.T) {},
+			usernameToGet: "bob",
+			wantUser:      domain.User{},
+			wantErr:       storage.ErrNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearUsersTable(t, testDB)
+			tc.setup(t)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			user, err := repo.GetByName(ctx, tc.usernameToGet)
+
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, user)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.wantUser, user)
+			}
+		})
+	}
+}
+
+func TestRepository_Create(t *testing.T) {
+	repo := userrepo.New(testDB)
+
+	type testCase struct {
+		name          string
+		setup         func(t *testing.T)
+		userToCreate  domain.User
+		wantErr       error
+		checkDatabase bool
+	}
+
+	testCases := []testCase{
+		{
+			name:  "Success",
+			setup: func(t *testing.T) {},
+			userToCreate: domain.User{
+				Username: "pablo",
+				Password: "pwdhash",
+			},
+			wantErr:       nil,
+			checkDatabase: true,
+		},
+		{
+			name: "User Already Exists",
+			setup: func(t *testing.T) {
+				seedUser(t, testDB, domain.User{
+					ID:       1,
+					Username: "duplicate_user",
+					Password: "pwdhash1",
+				})
+			},
+			userToCreate: domain.User{
+				Username: "duplicate_user",
+				Password: "pwdhash2",
+			},
+			wantErr:       storage.ErrDuplicate,
+			checkDatabase: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearUsersTable(t, testDB)
+			tc.setup(t)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			createdUser, err := repo.Create(ctx, tc.userToCreate)
+
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, createdUser.ID)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotZero(t, createdUser.ID, "ID should be generated by DB")
+			assert.Equal(t, tc.userToCreate.Username, createdUser.Username)
+			assert.Equal(t, tc.userToCreate.Password, createdUser.Password)
+
+			if tc.checkDatabase {
+				dbUser := getUserFromDB(t, testDB, createdUser.ID)
+				assert.Equal(t, createdUser, dbUser)
+			}
+		})
+	}
+}
